@@ -1,0 +1,1823 @@
+---
+title: "CTD data"
+author: "Gage Mele"
+date: "2024-11-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(lubridate)
+library(hms)
+library(cowplot)
+library(colorspace)
+library(stringr)
+library(timetk)
+library(cowplot)
+library(purrr)
+library(ggpmisc)
+library(ggExtra)
+```
+
+
+```{r}
+gc()
+
+#CTD<-read.csv("CTD_DownCasts_FullDataset_20241009.csv")
+CTD<-read.csv("CTD_DownCasts_FullDataset_20250210.csv")
+```
+
+```{r}
+#set date as a date-time variable
+CTD$date<-ymd(CTD$date)
+
+#filter for all relevant downcasts (cast 1)
+CTD<-CTD%>%
+  filter(cast == 1)
+
+
+#remove non-smart reef cast
+CTD<-CTD%>%
+  filter(date != "2024-02-08")
+
+
+#correct fluorescence data to read accurate chl a based on linear regression of fluorescence and in situ chl
+
+CTD$fluorescence_raw<-CTD$fluorescence
+
+CTD$fluorescence<-((CTD$fluorescence*0.60920))+0.25011
+```
+
+
+
+```{r}
+#remove shallowest 3m
+
+CTD<-CTD%>%
+  filter(depth >= 3)
+
+
+#Raw CTD cast (not averaged by meter)
+CTD_raw<-CTD
+
+
+#average cast by meter
+CTD<-CTD%>%
+  mutate(depth = round(depth,0))%>%
+  group_by(date,time,stn,depth)%>%
+  summarise_if(is.numeric, mean, na.rm = TRUE)
+  
+
+#seperate CR and OW statiosn
+CTD_CR<-CTD%>%
+  filter(stn == "CR")
+
+CTD_OW<-CTD%>%
+  filter(stn == "OW")
+
+
+
+```
+
+####filter all casts by date to calculate kd per day
+
+
+```{r}
+CTD_0125<-CTD%>%
+  filter(date == "2024-01-25")
+
+CTD_0125_par<-CTD_0125%>%
+  dplyr::select(depth,pressure,stn,date, par)
+
+
+#################################optical depth calc
+#Kd = slope of ln(par) and depth
+
+
+#filter depth's where log(par) changes linearly
+CTD_0125_OW_kd<-CTD_0125_par%>%
+  filter(stn == "OW", depth <=50,depth >=10)
+
+CTD_0125_OW_kd$ln_par<-log(CTD_0125_OW_kd$par)
+
+
+CTD_0125_OW_kd%>%
+  filter(depth <= 50, depth >=10)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0125")
+
+###optional, run linear model in r instead of using the stat_poly_eq function in ggplot2
+
+#lm_0125_OW_kd<-lm(ln_par ~ depth, data = CTD_0125_OW_kd)
+
+#summary(lm_0125_OW_kd)
+#sigma(lm_0125_OW_kd)
+
+
+#do the same for CR
+CTD_0125_CR_kd<-CTD_0125_par%>%
+  filter(stn == "CR")
+
+CTD_0125_CR_kd$ln_par<-log(CTD_0125_CR_kd$par)
+
+
+CTD_0125_CR_kd%>%
+  filter(depth <= 50, depth >=10)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0125")
+
+```
+
+
+###the following chunks are a repeat of the previous to calculate kd and first optical depth per day per station
+```{r}
+CTD_0207<-CTD%>%
+  filter(date == "2024-02-07")
+
+
+
+CTD_0207_par<-CTD_0207%>%
+  dplyr::select(depth,pressure,stn,date, par)
+
+############################################################
+#kd
+
+CTD_0207_OW_kd<-CTD_0207_par%>%
+  filter(stn == "OW")
+
+CTD_0207_OW_kd$ln_par<-log(CTD_0207_OW_kd$par)
+
+
+CTD_0207_OW_kd%>%
+  filter(depth <= 75, depth >=10)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0207")
+
+
+
+CTD_0207_CR_kd<-CTD_0207_par%>%
+  filter(stn == "CR")
+
+CTD_0207_CR_kd$ln_par<-log(CTD_0207_CR_kd$par)
+
+
+CTD_0207_CR_kd%>%
+  filter(depth <= 26, depth >=10)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0207")
+```
+
+
+
+
+```{r}
+CTD_0219<-CTD%>%
+  filter(date == "2024-02-20")
+
+
+
+CTD_0219_par<-CTD_0219%>%
+  dplyr::select(depth,pressure,stn,date, par)
+
+
+############################################################
+#kd
+
+CTD_0219_OW_kd<-CTD_0219_par%>%
+  filter(stn == "OW")
+
+CTD_0219_OW_kd$ln_par<-log(CTD_0219_OW_kd$par)
+
+
+CTD_0219_OW_kd%>%
+  filter(depth <= 39, depth >=15)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0219")
+
+
+
+CTD_0219_CR_kd<-CTD_0219_par%>%
+  filter(stn == "CR")
+
+CTD_0219_CR_kd$ln_par<-log(CTD_0219_CR_kd$par)
+
+
+CTD_0219_CR_kd%>%
+  filter(depth <= 30, depth >=5)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0219")
+```
+
+
+```{r}
+
+
+CTD_0303<-CTD%>%
+  filter(date == "2024-03-03")
+
+
+
+CTD_0303_par<-CTD_0303%>%
+  dplyr::select(depth,pressure,stn,date, par)
+
+############################################################
+#kd
+
+CTD_0303_OW_kd<-CTD_0303_par%>%
+  filter(stn == "OW")
+
+CTD_0303_OW_kd$ln_par<-log(CTD_0303_OW_kd$par)
+
+
+CTD_0303_OW_kd%>%
+  filter(depth >= 25)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0303")
+
+
+
+CTD_0303_CR_kd<-CTD_0303_par%>%
+  filter(stn == "CR")
+
+CTD_0303_CR_kd$ln_par<-log(CTD_0303_CR_kd$par)
+
+
+CTD_0303_CR_kd%>%
+  filter(depth >= 10, depth <=30)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0303")
+```
+
+
+
+
+```{r}
+CTD_0320<-CTD%>%
+  filter(date == "2024-03-20")
+
+
+
+CTD_0320_par<-CTD_0320%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_0320_OW_kd<-CTD_0320_par%>%
+  filter(stn == "OW")
+
+CTD_0320_OW_kd$ln_par<-log(CTD_0320_OW_kd$par)
+
+
+CTD_0320_OW_kd%>%
+  filter(depth >=10)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0320")
+
+
+
+CTD_0320_CR_kd<-CTD_0320_par%>%
+  filter(stn == "CR")
+
+CTD_0320_CR_kd$ln_par<-log(CTD_0320_CR_kd$par)
+
+
+CTD_0320_CR_kd%>%
+  filter(depth >=5)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0320")
+```
+
+
+
+```{r}
+CTD_0401<-CTD%>%
+  filter(date == "2024-04-01")
+
+
+CTD_0401_par<-CTD_0401%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_0401_OW_kd<-CTD_0401_par%>%
+  filter(stn == "OW")
+
+CTD_0401_OW_kd$ln_par<-log(CTD_0401_OW_kd$par)
+
+
+CTD_0401_OW_kd%>%
+  filter(depth >=10, depth <=100)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0401")
+
+
+
+CTD_0401_CR_kd<-CTD_0401_par%>%
+  filter(stn == "CR")
+
+CTD_0401_CR_kd$ln_par<-log(CTD_0401_CR_kd$par)
+
+
+CTD_0401_CR_kd%>%
+  filter(depth >= 15)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0401")
+```
+
+
+```{r}
+CTD_0429<-CTD%>%
+  filter(date == "2024-04-30")
+
+
+
+CTD_0429_par<-CTD_0429%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_0429_OW_kd<-CTD_0429_par%>%
+  filter(stn == "OW")
+
+CTD_0429_OW_kd$ln_par<-log(CTD_0429_OW_kd$par)
+
+
+CTD_0429_OW_kd%>%
+  filter(depth <= 40)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0429")
+
+
+
+CTD_0429_CR_kd<-CTD_0429_par%>%
+  filter(stn == "CR")
+
+CTD_0429_CR_kd$ln_par<-log(CTD_0429_CR_kd$par)
+
+
+CTD_0429_CR_kd%>%
+  filter(depth >= 5)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0429")
+```
+
+
+
+```{r}
+CTD_0512<-CTD%>%
+  filter(date == "2024-05-12")
+
+
+CTD_0512_par<-CTD_0512%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+
+
+############################################################
+#kd
+
+CTD_0512_OW_kd<-CTD_0512_par%>%
+  filter(stn == "OW")
+
+CTD_0512_OW_kd$ln_par<-log(CTD_0512_OW_kd$par)
+
+
+CTD_0512_OW_kd%>%
+  filter(depth >=15)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0512")
+
+
+
+CTD_0512_CR_kd<-CTD_0512_par%>%
+  filter(stn == "CR")
+
+CTD_0512_CR_kd$ln_par<-log(CTD_0512_CR_kd$par)
+
+
+CTD_0512_CR_kd%>%
+  filter(depth >= 15)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0512")
+```
+
+
+```{r}
+CTD_0526<-CTD%>%
+  filter(date == "2024-05-27")
+
+
+CTD_0526_par<-CTD_0526%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_0526_OW_kd<-CTD_0526_par%>%
+  filter(stn == "OW")
+
+CTD_0526_OW_kd$ln_par<-log(CTD_0526_OW_kd$par)
+
+
+CTD_0526_OW_kd%>%
+  filter(depth >= 15)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0526")
+
+
+
+CTD_0526_CR_kd<-CTD_0526_par%>%
+  filter(stn == "CR")
+
+CTD_0526_CR_kd$ln_par<-log(CTD_0526_CR_kd$par)
+
+
+CTD_0526_CR_kd%>%
+  filter(depth <=40)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0526")
+```
+
+
+```{r}
+CTD_0610<-CTD%>%
+  filter(date == "2024-06-10")
+
+
+CTD_0610_par<-CTD_0610%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_0610_OW_kd<-CTD_0610_par%>%
+  filter(stn == "OW")
+
+CTD_0610_OW_kd$ln_par<-log(CTD_0610_OW_kd$par)
+
+
+CTD_0610_OW_kd%>%
+  filter(depth >=10)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0610")
+
+
+
+CTD_0610_CR_kd<-CTD_0610_par%>%
+  filter(stn == "CR")
+
+CTD_0610_CR_kd$ln_par<-log(CTD_0610_CR_kd$par)
+
+
+CTD_0610_CR_kd%>%
+  filter(depth >=10)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0610")
+```
+
+
+```{r}
+CTD_0626<-CTD%>%
+  filter(date == "2024-06-26")
+
+
+
+CTD_0626_par<-CTD_0626%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_0626_OW_kd<-CTD_0626_par%>%
+  filter(stn == "OW")
+
+CTD_0626_OW_kd$ln_par<-log(CTD_0626_OW_kd$par)
+
+
+CTD_0626_OW_kd%>%
+  filter(depth >=15)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0626")
+
+
+
+CTD_0626_CR_kd<-CTD_0626_par%>%
+  filter(stn == "CR")
+
+CTD_0626_CR_kd$ln_par<-log(CTD_0626_CR_kd$par)
+
+
+CTD_0626_CR_kd%>%
+  filter(depth >=15)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0626")
+```
+
+
+```{r}
+CTD_0722<-CTD%>%
+  filter(date == "2024-07-22")
+
+
+CTD_0722_par<-CTD_0722%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_0722_OW_kd<-CTD_0722_par%>%
+  filter(stn == "OW")
+
+CTD_0722_OW_kd$ln_par<-log(CTD_0722_OW_kd$par)
+
+
+CTD_0722_OW_kd%>%
+  filter(depth >=5)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0722")
+
+
+
+CTD_0722_CR_kd<-CTD_0722_par%>%
+  filter(stn == "CR")
+
+CTD_0722_CR_kd$ln_par<-log(CTD_0722_CR_kd$par)
+
+
+CTD_0722_CR_kd%>%
+  filter(depth >=5)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0722")
+```
+
+
+```{r}
+CTD_0813<-CTD%>%
+  filter(date == "2024-08-13")
+
+
+CTD_0813_par<-CTD_0813%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_0813_OW_kd<-CTD_0813_par%>%
+  filter(stn == "OW")
+
+CTD_0813_OW_kd$ln_par<-log(CTD_0813_OW_kd$par)
+
+
+CTD_0813_OW_kd%>%
+  filter(depth >=20, depth <=55)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0813")
+
+
+
+CTD_0813_CR_kd<-CTD_0813_par%>%
+  filter(stn == "CR")
+
+CTD_0813_CR_kd$ln_par<-log(CTD_0813_CR_kd$par)
+
+
+CTD_0813_CR_kd%>%
+  filter(depth >= 15)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0813")
+```
+
+
+```{r}
+CTD_0826<-CTD%>%
+  filter(date == "2024-08-26")
+
+
+
+CTD_0826_par<-CTD_0826%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_0826_OW_kd<-CTD_0826_par%>%
+  filter(stn == "OW")
+
+CTD_0826_OW_kd$ln_par<-log(CTD_0826_OW_kd$par)
+
+
+CTD_0826_OW_kd%>%
+  filter(depth >=10,depth <=40)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0826")
+
+
+
+CTD_0826_CR_kd<-CTD_0826_par%>%
+  filter(stn == "CR")
+
+CTD_0826_CR_kd$ln_par<-log(CTD_0826_CR_kd$par)
+
+
+CTD_0826_CR_kd%>%
+  filter(depth >=10)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0826")
+```
+
+
+```{r}
+CTD_0911<-CTD%>%
+  filter(date == "2024-09-11")
+
+CTD_0911_par<-CTD_0911%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_0911_OW_kd<-CTD_0911_par%>%
+  filter(stn == "OW")
+
+CTD_0911_OW_kd$ln_par<-log(CTD_0911_OW_kd$par)
+
+
+CTD_0911_OW_kd%>%
+  filter(depth >=30, depth <=50)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0911")
+
+
+
+CTD_0911_CR_kd<-CTD_0911_par%>%
+  filter(stn == "CR")
+
+CTD_0911_CR_kd$ln_par<-log(CTD_0911_CR_kd$par)
+
+
+CTD_0911_CR_kd%>%
+  filter(depth >=10)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0911")
+```
+
+
+
+```{r}
+CTD_1006<-CTD%>%
+  filter(date == "2024-10-06")
+
+
+
+CTD_1006_par<-CTD_1006%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_1006_OW_kd<-CTD_1006_par%>%
+  filter(stn == "OW")
+
+CTD_1006_OW_kd$ln_par<-log(CTD_1006_OW_kd$par)
+
+
+CTD_1006_OW_kd%>%
+  filter()%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 1006")
+
+
+
+CTD_1006_CR_kd<-CTD_1006_par%>%
+  filter(stn == "CR")
+
+CTD_1006_CR_kd$ln_par<-log(CTD_1006_CR_kd$par)
+
+
+CTD_1006_CR_kd%>%
+  filter()%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 1006")
+```
+```{r}
+CTD_1021<-CTD%>%
+  filter(date == "2024-10-21")
+
+
+
+CTD_1021_par<-CTD_1021%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_1021_OW_kd<-CTD_1021_par%>%
+  filter(stn == "OW")
+
+CTD_1021_OW_kd$ln_par<-log(CTD_1021_OW_kd$par)
+
+
+CTD_1021_OW_kd%>%
+  filter(depth >=10,depth<=100)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 1021")
+
+
+
+CTD_1021_CR_kd<-CTD_1021_par%>%
+  filter(stn == "CR")
+
+CTD_1021_CR_kd$ln_par<-log(CTD_1021_CR_kd$par)
+
+
+CTD_1021_CR_kd%>%
+  filter()%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 1021")
+```
+
+
+
+```{r}
+CTD_1105<-CTD%>%
+  filter(date == "2024-11-05")
+
+
+CTD_1105_par<-CTD_1105%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_1105_OW_kd<-CTD_1105_par%>%
+  filter(stn == "OW")
+
+CTD_1105_OW_kd$ln_par<-log(CTD_1105_OW_kd$par)
+
+
+CTD_1105_OW_kd%>%
+  filter(depth >=10)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 1105")
+
+
+
+CTD_1105_CR_kd<-CTD_1105_par%>%
+  filter(stn == "CR")
+
+CTD_1105_CR_kd$ln_par<-log(CTD_1105_CR_kd$par)
+
+
+CTD_1105_CR_kd%>%
+  filter(depth>=10)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 1105")
+```
+
+
+```{r}
+CTD_1118<-CTD%>%
+  filter(date == "2024-11-18")
+
+
+CTD_1118_par<-CTD_1118%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+
+############################################################
+#kd
+
+CTD_1118_OW_kd<-CTD_1118_par%>%
+  filter(stn == "OW")
+
+CTD_1118_OW_kd$ln_par<-log(CTD_1118_OW_kd$par)
+
+
+CTD_1118_OW_kd%>%
+  filter(depth >=10, depth <=35)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 1118")
+
+
+
+CTD_1118_CR_kd<-CTD_1118_par%>%
+  filter(stn == "CR")
+
+CTD_1118_CR_kd$ln_par<-log(CTD_1118_CR_kd$par)
+
+
+CTD_1118_CR_kd%>%
+  filter(depth >=15)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 1118")
+```
+
+
+```{r}
+CTD_1202<-CTD%>%
+  filter(date == "2024-12-02")
+
+
+CTD_1202_par<-CTD_1202%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+
+############################################################
+#kd
+
+CTD_1202_OW_kd<-CTD_1202_par%>%
+  filter(stn == "OW")
+
+CTD_1202_OW_kd$ln_par<-log(CTD_1202_OW_kd$par)
+
+
+CTD_1202_OW_kd%>%
+  filter(depth >=5,depth <=100)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 1202")
+
+
+
+CTD_1202_CR_kd<-CTD_1202_par%>%
+  filter(stn == "CR")
+
+CTD_1202_CR_kd$ln_par<-log(CTD_1202_CR_kd$par)
+
+
+CTD_1202_CR_kd%>%
+  filter(depth >=5)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 1202")
+```
+
+
+```{r}
+CTD_1216<-CTD%>%
+  filter(date == "2024-12-16")
+
+
+CTD_1216_par<-CTD_1216%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_1216_OW_kd<-CTD_1216_par%>%
+  filter(stn == "OW")
+
+CTD_1216_OW_kd$ln_par<-log(CTD_1216_OW_kd$par)
+
+
+CTD_1216_OW_kd%>%
+  filter(depth <=100)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 1216")
+
+
+
+CTD_1216_CR_kd<-CTD_1216_par%>%
+  filter(stn == "CR")
+
+CTD_1216_CR_kd$ln_par<-log(CTD_1216_CR_kd$par)
+
+
+CTD_1216_CR_kd%>%
+  filter(depth >=5)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 1216")
+```
+
+
+
+```{r}
+CTD_0113<-CTD%>%
+  filter(date == "2025-01-13")
+
+
+CTD_0113_par<-CTD_0113%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_0113_OW_kd<-CTD_0113_par%>%
+  filter(stn == "OW")
+
+CTD_0113_OW_kd$ln_par<-log(CTD_0113_OW_kd$par)
+
+
+CTD_0113_OW_kd%>%
+  filter(depth >=20,depth <=75)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0113")
+
+
+
+CTD_0113_CR_kd<-CTD_0113_par%>%
+  filter(stn == "CR")
+
+CTD_0113_CR_kd$ln_par<-log(CTD_0113_CR_kd$par)
+
+
+CTD_0113_CR_kd%>%
+  filter(depth >=10)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0113")
+```
+
+
+
+
+```{r}
+CTD_0127<-CTD%>%
+  filter(date == "2025-01-27")
+
+
+CTD_0127_par<-CTD_0127%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+
+############################################################
+#kd
+
+CTD_0127_OW_kd<-CTD_0127_par%>%
+  filter(stn == "OW")
+
+CTD_0127_OW_kd$ln_par<-log(CTD_0127_OW_kd$par)
+
+
+CTD_0127_OW_kd%>%
+  filter(depth >=10, depth <=100)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0127")
+
+
+
+CTD_0127_CR_kd<-CTD_0127_par%>%
+  filter(stn == "CR")
+
+CTD_0127_CR_kd$ln_par<-log(CTD_0127_CR_kd$par)
+
+
+CTD_0127_CR_kd%>%
+  filter(depth >=10)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0127")
+```
+
+
+```{r}
+CTD_0210<-CTD%>%
+  filter(date == "2025-02-10")
+
+
+
+CTD_0210_par<-CTD_0210%>%
+  dplyr::select(depth,pressure,stn,date, par)%>%
+  filter()
+
+############################################################
+#kd
+
+CTD_0210_OW_kd<-CTD_0210_par%>%
+  filter(stn == "OW")
+
+CTD_0210_OW_kd$ln_par<-log(CTD_0210_OW_kd$par)
+
+
+CTD_0210_OW_kd%>%
+  filter(depth >=10)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd OW 0210")
+
+
+
+CTD_0210_CR_kd<-CTD_0210_par%>%
+  filter(stn == "CR")
+
+CTD_0210_CR_kd$ln_par<-log(CTD_0210_CR_kd$par)
+
+
+CTD_0210_CR_kd%>%
+  filter(depth >=10)%>%
+ggplot(mapping=aes (x= depth, y=ln_par))+
+  geom_point(mapping=aes (x= depth, y=ln_par))+
+  geom_smooth(mapping=aes(x=depth, y=ln_par),method = "lm", se = TRUE)+
+  stat_poly_eq(use_label(c("eq", "R2", "p")))+
+  ggtitle("Kd CR 0210")
+```
+
+
+
+
+```{r}
+##remove unnecesary memory
+gc()
+
+```
+
+
+```{r}
+#CTD$date<-ymd(CTD$date)
+```
+
+
+
+```{r}
+#calculate density from absolute salinity and conservative temperature
+
+# Convert Practical Salinity (PSU) to Absolute Salinity (g/kg)
+CTD$absolute_salinity <- gsw_SA_from_SP(SP = CTD$salinity, p = CTD$pressure, longitude = 0, latitude = 0)
+
+# Convert in situ temperature to Conservative Temperature (CT)
+CTD$conservative_temperature <- gsw_CT_from_t(SA = CTD$absolute_salinity, t = CTD$temperature, p = CTD$pressure)
+
+# Calculate density
+CTD$density <- gsw_rho(SA = CTD$absolute_salinity, CT = CTD$conservative_temperature, p = CTD$pressure)
+
+
+
+
+
+# Convert Practical Salinity (PSU) to Absolute Salinity (g/kg)
+CTD_CR$absolute_salinity <- gsw_SA_from_SP(SP = CTD_CR$salinity, p = CTD_CR$pressure, longitude = 0, latitude = 0)
+
+# Convert in situ temperature to Conservative Temperature (CT)
+CTD_CR$conservative_temperature <- gsw_CT_from_t(SA = CTD_CR$absolute_salinity, t = CTD_CR$temperature, p = CTD_CR$pressure)
+
+# Calculate density
+CTD_CR$density <- gsw_rho(SA = CTD_CR$absolute_salinity, CT = CTD_CR$conservative_temperature, p = CTD_CR$pressure)
+
+
+# Convert Practical Salinity (PSU) to Absolute Salinity (g/kg)
+CTD_OW$absolute_salinity <- gsw_SA_from_SP(SP = CTD_OW$salinity, p = CTD_OW$pressure, longitude = 0, latitude = 0)
+
+# Convert in situ temperature to Conservative Temperature (CT)
+CTD_OW$conservative_temperature <- gsw_CT_from_t(SA = CTD_OW$absolute_salinity, t = CTD_OW$temperature, p = CTD_OW$pressure)
+
+# Calculate density
+CTD_OW$density <- gsw_rho(SA = CTD_OW$absolute_salinity, CT = CTD_OW$conservative_temperature, p = CTD_OW$pressure)
+
+
+```
+
+
+```{r}
+##filter data to exclude shallowest 10m
+
+
+CTD_OW_10<-CTD_OW%>%
+  filter(depth >= 10)
+
+CTD_CR_10<-CTD_CR%>%
+  filter(depth >= 10)
+
+
+##calculate DCM 
+cm_cr <- CTD_CR_10%>%
+  group_by(date,stn)%>%
+  dplyr::summarise(fluorescence = max(fluorescence))
+
+dep_cr<-CTD_CR_10%>%
+  dplyr::select(1,3,4,11)
+
+dcm_cr<-left_join(cm_cr,dep_cr,by=c("date","stn","fluorescence"))
+
+
+cm_ow <- CTD_OW_10%>%
+  group_by(date,stn)%>%
+  dplyr::summarise(fluorescence = max(fluorescence))
+
+dep_ow<-CTD_OW_10%>%
+  dplyr::select(1,3,4,11)
+
+dcm_ow<-left_join(cm_ow,dep_ow,by=c("date","stn","fluorescence"))
+
+
+#calculate MLD from temp
+
+CTD_date_cr<-CTD_CR_10%>%
+  group_by(date,stn)%>%
+  summarise(temp_av = mean(temperature))
+
+
+
+mld_t_cr <- data.frame(date= as.POSIXct(character(0)), stn = character(0), depth = numeric(0))
+
+
+for(i in 1:24){
+  date_target<-CTD_date_cr$date[i]
+  
+  temp_cr<-CTD_CR_10%>%
+  filter(date == date_target & stn == "CR" & depth >= 10)
+  
+  run<-diff(temp_cr$depth)
+rise<-diff(temp_cr$temperature)
+slope<-rise/run
+
+tsmin_cr<-which.min(slope)
+
+
+new_data<-data.frame("date" = date_target, 
+                     "stn"="CR",
+                     "depth" = tsmin_cr+10) #added +10 because we start at 10m? is this kosher? I can't figure out why I keep getting low values but this seems to fix it kinda
+
+
+  mld_t_cr<-rbind(mld_t_cr, new_data)
+}
+
+CTD_date_ow<-CTD_OW_10%>%
+  group_by(date,stn)%>%
+  summarise(temp_av = mean(temperature))
+
+mld_t_ow <- data.frame(date= as.POSIXct(character(0)), stn = character(0), depth = numeric(0))
+
+
+for(i in 1:24){
+  date_target<-CTD_date_ow$date[i]
+  
+  temp_ow<-CTD_OW_10%>%
+  filter(date == date_target & stn == "OW" & depth >= 10)
+  
+  run<-diff(temp_ow$depth)
+rise<-diff(temp_ow$temperature)
+slope<-rise/run
+
+tsmin_ow<-which.min(slope)
+
+
+new_data<-data.frame("date" = date_target, 
+                     "stn"="OW",
+                     "depth" = tsmin_ow+10) #added +10 because we start at 10m? is this kosher? I can't figure out why I keep getting low values but this seems to fix it kinda
+
+
+  mld_t_ow<-rbind(mld_t_ow, new_data)
+}
+
+
+
+
+#calculate MLD from density
+
+mld_d_cr <- data.frame(date= as.POSIXct(character(0)), stn = character(0), depth = numeric(0))
+
+
+##########################################################
+
+###############################################
+
+for(i in 1:24){
+  date_target<-CTD_date_cr$date[i]
+  
+  den_cr<-CTD_CR_10%>%
+  filter(date == date_target & stn == "CR" & depth >= 10)
+  
+  run<-diff(den_cr$depth)
+rise<-diff(den_cr$density) #changed from sigmaTheta
+slope<-rise/run
+
+dsmax_cr<-which.max(slope)
+
+
+new_data<-data.frame("date" = date_target, 
+                     "stn"="CR",
+                     "depth" = dsmax_cr+10) #added +10 because we start at 10m? is this kosher? I can't figure out why I keep getting low values but this seems to fix it kinda
+
+
+  mld_d_cr<-rbind(mld_d_cr, new_data)
+}
+
+
+mld_d_ow <- data.frame(date= as.POSIXct(character(0)), stn = character(0), depth = numeric(0))
+
+CTD_OW_10<-CTD_OW%>%
+  filter(depth >= 10)
+
+
+for(i in 1:24){
+  date_target<-CTD_date_ow$date[i]
+  
+  den_ow<-CTD_OW_10%>%
+  filter(date == date_target & stn == "OW" & depth >= 10)
+  
+  run<-diff(den_ow$depth)
+rise<-diff(den_ow$density) #changed from sigmaTheta
+slope<-rise/run
+
+dsmax_ow<-which.max(slope)
+
+
+new_data<-data.frame("date" = date_target, 
+                     "stn"="OW",
+                     "depth" = dsmax_ow +10) #added +10 because we start at 10m? is this kosher? I can't figure out why I keep getting low values but this seems to fix it kinda
+
+
+  mld_d_ow<-rbind(mld_d_ow, new_data)
+}
+
+############################################
+##############################################
+
+###############################################
+##########################################
+
+##calculate MLD from bouyancy frequency
+CTD_CR_N2<-CTD_CR%>%
+  filter(depth >= 10)
+
+CTD_OW_N2<-CTD_OW%>%
+  filter(depth >= 10)
+
+
+
+
+mld_b_depth_cr <- CTD_CR_N2%>%
+  group_by(date,stn)%>%
+  dplyr::summarise(N2 = max(N2))
+
+mld_b_full_cr<-CTD_CR_N2%>%
+  dplyr::select(1,3,4,17)
+
+mld_b_cr<-left_join(mld_b_depth_cr,mld_b_full_cr,by=c("date","stn","N2"))
+
+mld_b_cr<-mld_b_cr%>%
+  filter(date != "2024-10-06")
+
+
+mld_b_depth_ow <- CTD_OW_N2%>%
+  group_by(date,stn)%>%
+  dplyr::summarise(N2 = max(N2))
+
+mld_b_full_ow<-CTD_OW_N2%>%
+  dplyr::select(1,3,4,17)
+
+mld_b_ow<-left_join(mld_b_depth_ow,mld_b_full_ow,by=c("date","stn","N2"))
+
+mld_b_ow<-mld_b_ow%>%
+  filter(date != "2024-10-06")
+
+
+###############################################################################
+#plot casts with DCM/MLD overlayed
+ggplot()+
+  geom_tile(data = CTD_OW, mapping= aes(x=date,y=depth, color = fluorescence, fill =fluorescence), size = 1)+
+  geom_tile(data = dcm_ow, mapping= aes(x=date,y=depth), color = "red", size = 1, alpha =0.05)+
+  coord_fixed()+
+  scale_y_reverse()+
+  scale_color_continuous(type = "viridis")+
+  scale_fill_continuous(type = "viridis")+
+  ggtitle("fluorescence OW & DCM")+
+scale_x_continuous(breaks = pretty(CTD_OW$date, n = 10))+
+  theme_cowplot()
+
+OW_fluor_log<-ggplot()+
+  geom_tile(data = CTD_OW, mapping= aes(x=date,y=depth, color = log(fluorescence), fill =log(fluorescence)), size = 1)+
+  geom_tile(data = dcm_ow, mapping= aes(x=date,y=depth), color = "red", size = 1, alpha =0.05)+
+  coord_fixed()+
+  scale_y_reverse()+
+  scale_color_continuous(type = "viridis")+
+  scale_fill_continuous(type = "viridis")+
+  ggtitle("log fluorescence OW &DCM")+
+scale_x_continuous(breaks = pretty(CTD_OW$date, n = 10))+
+  theme_cowplot()
+
+OW_fluor_log
+
+
+
+
+
+
+OW_temp<-ggplot()+
+  geom_tile(data = CTD_OW, mapping= aes(x=date,y=depth, color = temperature, fill = temperature), size = 1)+
+  geom_tile(data = mld_t_ow, mapping= aes(x=date,y=depth), color = "red", size = 1)+
+  coord_fixed()+
+  scale_y_reverse()+
+  scale_color_continuous(type = "viridis")+
+  scale_fill_continuous(type = "viridis")+
+  ggtitle("temperature OW & MLD from temp")+
+scale_x_continuous(breaks = pretty(CTD_OW$date, n = 10))+
+  theme_cowplot()
+
+OW_temp
+
+
+OW_sal<-ggplot()+
+  geom_tile(data = CTD_OW, mapping= aes(x=date,y=depth, color = salinity, fill = salinity), size = 1)+
+  coord_fixed()+
+  scale_y_reverse()+
+  scale_color_continuous(type = "viridis")+
+  scale_fill_continuous(type = "viridis")+
+  ggtitle("salinity OW")+
+scale_x_continuous(breaks = pretty(CTD_OW$date, n = 10))+
+  theme_cowplot()
+
+OW_sal
+
+
+
+OW_den<-ggplot()+
+  geom_tile(data = CTD_OW, mapping= aes(x=date,y=depth, color = density, fill = density), size = 1)+#using calculated density instead of sigmaTheta
+  geom_tile(data = mld_d_ow, mapping= aes(x=date,y=depth), color = "red", size = 1)+
+  coord_fixed()+
+  scale_y_reverse()+
+  scale_color_continuous(type = "viridis")+
+  scale_fill_continuous(type = "viridis")+
+  ggtitle("density OW & MLD from calculated density")+
+scale_x_continuous(breaks = pretty(CTD_OW$date, n = 10))+
+  theme_cowplot()
+
+OW_den
+
+
+OW_den_bf<-ggplot()+
+  geom_tile(data = CTD_OW, mapping= aes(x=date,y=depth, color = density, fill = density), size = 1)+#using calculated density instead of sigmaTheta
+  geom_tile(data = mld_b_ow, mapping= aes(x=date,y=depth), color = "red", size = 1)+
+  coord_fixed()+
+  scale_y_reverse()+
+  scale_color_continuous(type = "viridis")+
+  scale_fill_continuous(type = "viridis")+
+  ggtitle("density OW & MLD from bouyancy frequency")+
+scale_x_continuous(breaks = pretty(CTD_OW$date, n = 10))+
+  theme_cowplot()
+
+OW_den_bf
+
+
+
+ggplot()+
+  geom_tile(data = CTD_OW, mapping= aes(x=date,y=depth, color = oxygen2))+
+  coord_fixed()+
+  scale_y_reverse()+
+  scale_color_continuous(type = "viridis")+
+  ggtitle("oxygen OW")
+###################################################################
+
+
+ggplot()+
+  geom_tile(data = CTD_CR, mapping= aes(x=date,y=depth, color = fluorescence), size = 1)+
+  geom_tile(data = dcm_cr, mapping= aes(x=date,y=depth), color = "red", size = 1, alpha =0.05)+
+  coord_fixed()+
+  scale_y_reverse()+
+  scale_color_continuous(type = "viridis")+
+  ggtitle("fluorescence CR & DCM")+
+scale_x_continuous(breaks = pretty(CTD_CR$date, n = 10))+
+  theme_cowplot()
+
+CR_temp<-ggplot()+
+  geom_tile(data = CTD_CR, mapping= aes(x=date,y=depth, color = temperature), size = 1)+
+  geom_tile(data = mld_t_cr, mapping= aes(x=date,y=depth), color = "red", size = 1)+
+  coord_fixed()+
+  scale_y_reverse()+
+  scale_color_continuous(type = "viridis")+
+  ggtitle("temperature CR & MLD from temp")+
+scale_x_continuous(breaks = pretty(CTD_CR$date, n = 10))+
+  theme_cowplot()
+
+CR_temp
+
+
+CR_sal<-ggplot()+
+  geom_tile(data = CTD_CR, mapping= aes(x=date,y=depth, color = salinity), size = 1)+
+  coord_fixed()+
+  scale_y_reverse()+
+  scale_color_continuous(type = "viridis")+
+  ggtitle("salinity CR")+
+scale_x_continuous(breaks = pretty(CTD_CR$date, n = 10))+
+  theme_cowplot()
+CR_sal
+
+
+
+CR_den<-ggplot()+
+  geom_tile(data = CTD_CR, mapping= aes(x=date,y=depth, color = density), size = 1)+ #using calculated density instead of sigmaTheta
+  geom_tile(data = mld_d_cr, mapping= aes(x=date,y=depth), color = "red", size = 1)+
+  coord_fixed()+
+  scale_y_reverse()+
+  scale_color_continuous(type = "viridis")+
+  ggtitle("density CR & MLD from calculated density")+
+scale_x_continuous(breaks = pretty(CTD_CR$date, n = 10))+
+  theme_cowplot()
+
+CR_den
+
+
+ggplot()+
+  geom_tile(data = CTD_CR, mapping= aes(x=date,y=depth, color = par), size = 1)+
+  coord_fixed()+
+  scale_y_reverse()+
+  scale_color_continuous(type = "viridis")+
+  ggtitle("par CR")+
+scale_x_continuous(breaks = pretty(CTD_CR$date, n = 10))+
+  theme_cowplot()
+
+
+ggplot()+
+  geom_tile(data = CTD_CR, mapping= aes(x=date,y=depth, color = oxygen2, fill = oxygen2))+
+  coord_fixed()+
+  scale_y_reverse()+
+  scale_color_viridis_b()+
+  scale_fill_viridis_b()+
+  ggtitle("oxygen CR")
+
+
+#library(castr)
+
+
+```
+
+
+
+
+
+
+
+
+```{r}
+#save data as csv
+
+write.csv(dcm_cr,"dcm_cr.csv")
+write.csv(dcm_ow,"dcm_ow.csv")
+
+write.csv(mld_d_cr, "mld_d_cr.csv")
+write.csv(mld_d_ow, "mld_d_ow.csv")
+
+write.csv(mld_t_cr, "mld_t_cr.csv")
+write.csv(mld_t_ow, "mld_t_ow.csv")
+
+write.csv(mld_b_cr, "mld_b_cr.csv")
+write.csv(mld_b_ow, "mld_b_ow.csv")
+
+```
+
+```{r}
+##calculating diffuseness of DCM?
+
+##calculate DCM sd
+cm_sd_cr <- CTD_CR_10%>%
+  group_by(date,stn)%>%
+  dplyr::summarise(fluorescence_sd = sd(fluorescence))
+
+
+cm_sd_ow <- CTD_OW_10%>%
+  group_by(date,stn)%>%
+  dplyr::summarise(fluorescence_sd = sd(fluorescence))
+
+
+
+
+```
+
+```{r}
+#filter dataframe so each date appears once
+dates<-CTD_CR$date
+
+dates<-unique(dates)
+
+
+#create results dataframe to save dcm and thickness
+results <- data.frame(date = unique(CTD_CR$date), dcm_depth = NA, diffuseness = NA, ul_depth = NA, ll_depth =NA)
+
+
+#loop to get a depth value for 1sd of chla above and below the DCM
+for (i in 1:length(dates)) {
+  date_target<-dates[i]
+  
+  subset_df<-CTD_CR[CTD_CR$date == date_target, ]
+  
+  subset_dcm<-dcm_cr[dcm_cr$date == date_target, ]
+  
+  subset_sd<-CTD_CR_10[CTD_CR_10$date == date_target, ]
+  
+  subset_sd<-subset_sd%>%
+  group_by(date,stn)%>%
+  dplyr::summarise(fluorescence_sd = sd(fluorescence))
+  
+  #subset_sd<-cm_sd_cr[cm_sd_cr$date == date_target,]
+  
+  lower_bound <- subset_dcm$fluorescence - subset_sd$fluorescence_sd
+  upper_bound <- subset_dcm$fluorescence + subset_sd$fluorescence_sd
+  
+  valid_depths <- subset_df$depth[subset_df$fluorescence >= lower_bound & subset_df$fluorescence <= upper_bound]
+  
+  
+  ll_depth <- min(valid_depths, na.rm = TRUE)
+  ul_depth <- max(valid_depths, na.rm = TRUE)
+  
+  
+  diffuseness <- max(valid_depths, na.rm = TRUE) - min(valid_depths, na.rm = TRUE)
+  
+   results$dcm_depth[i] <- subset_dcm$depth
+  results$diffuseness[i] <- diffuseness
+  results$ul_depth[i] <- ul_depth
+  results$ll_depth[i] <-ll_depth
+
+}
+
+dcm_spread_cr <- results
+
+
+#########################################################
+
+#same but for OW
+
+results <- data.frame(date = unique(CTD_OW$date), dcm_depth = NA, diffuseness = NA, ul_depth = NA, ll_depth =NA)
+
+
+for (i in 1:length(dates)) {
+  date_target<-dates[i]
+  
+  subset_df<-CTD_OW[CTD_OW$date == date_target, ]
+  
+  subset_dcm<-dcm_ow[dcm_ow$date == date_target, ]
+  
+  subset_sd<-CTD_OW_10[CTD_OW_10$date == date_target, ]
+  
+  subset_sd<-subset_sd%>%
+  group_by(date,stn)%>%
+  dplyr::summarise(fluorescence_sd = sd(fluorescence))
+  
+  #subset_sd<-cm_sd_ow[cm_sd_ow$date == date_target,] #I changed this line to the above code because I thought it was calculating sd with each day pooled together, but I actually did seperate by date, so either code works the same
+  
+  lower_bound <- subset_dcm$fluorescence - subset_sd$fluorescence_sd
+  upper_bound <- subset_dcm$fluorescence + subset_sd$fluorescence_sd
+  
+  valid_depths <- subset_df$depth[subset_df$fluorescence >= lower_bound & subset_df$fluorescence <= upper_bound]
+  
+  
+  ll_depth <- min(valid_depths, na.rm = TRUE)
+  ul_depth <- max(valid_depths, na.rm = TRUE)
+  
+  
+  diffuseness <- max(valid_depths, na.rm = TRUE) - min(valid_depths, na.rm = TRUE)
+  
+   results$dcm_depth[i] <- subset_dcm$depth
+  results$diffuseness[i] <- diffuseness
+  results$ul_depth[i] <- ul_depth
+  results$ll_depth[i] <-ll_depth
+
+}
+
+dcm_spread_ow <- results
+```
+
+```{r}
+#save data as csv
+write.csv(dcm_spread_ow,"dcm_spread_ow.csv")
+
+write.csv(dcm_spread_cr,"dcm_spread_cr.csv")
+
+
+```
+
+```{r}
+###plot DCM with DCM thickness
+
+ow_dcm_diffuseness<-ggplot()+
+  geom_tile(data = CTD_OW, mapping= aes(x=date,y=depth, color = log(fluorescence), fill =log(fluorescence)), size = 1)+
+  geom_tile(data = dcm_spread_ow, mapping = aes(x=date, y=ul_depth), color = "pink", size = 1, alpha =0.5)+
+  geom_tile(data = dcm_spread_ow, mapping = aes(x=date, y=ll_depth), color = "pink", size = 1, alpha =0.5)+
+  geom_tile(data = dcm_ow, mapping= aes(x=date,y=depth), color = "red", size = 1, alpha =0.5)+
+  coord_fixed()+
+  scale_y_reverse()+
+  scale_color_continuous(type = "viridis")+
+  scale_fill_continuous(type = "viridis")+
+  ggtitle("fluorescence OW & DCM thickness")+
+scale_x_continuous(breaks = pretty(CTD_OW$date, n = 10))+
+  theme_cowplot()
+
+cr_dcm_diffuseness<-ggplot()+
+  geom_tile(data = CTD_CR, mapping= aes(x=date,y=depth, color = log(fluorescence), fill =log(fluorescence)), size = 1)+
+  geom_tile(data = dcm_spread_cr, mapping = aes(x=date, y=ul_depth), color = "pink", size = 1, alpha =0.5)+
+  geom_tile(data = dcm_spread_cr, mapping = aes(x=date, y=ll_depth), color = "pink", size = 1, alpha =0.5)+
+  geom_tile(data = dcm_cr, mapping= aes(x=date,y=depth), color = "red", size = 1, alpha =0.5)+
+  coord_fixed()+
+  scale_y_reverse()+
+  scale_color_continuous(type = "viridis")+
+  scale_fill_continuous(type = "viridis")+
+  ggtitle("fluorescence CR & DCM thickness")+
+scale_x_continuous(breaks = pretty(CTD_OW$date, n = 10))+
+  theme_cowplot()
+
+
+ow_dcm_diffuseness
+cr_dcm_diffuseness
+
+```
+
+
+
+```{r}
+# Function to calculate the diffuseness of the DCM
+dcm_diffuseness <- function(date, depths, chlorophyll, dcm_depth, dcm_value, chl_sd) {
+  # Define the upper and lower threshold
+  lower_threshold <- dcm_value - chl_sd
+  upper_threshold <- dcm_value + chl_sd
+  
+  # Identify depths where chlorophyll is within the threshold range
+  within_range <- which(chlorophyll >= lower_threshold & chlorophyll <= upper_threshold)
+  
+  # Get the corresponding depth range
+  if (length(within_range) > 0) {
+    diffuse_min <- min(depths[within_range])
+    diffuse_max <- max(depths[within_range])
+    return(data.frame(Date = date, Diffuse_Min = diffuse_min, Diffuse_Max = diffuse_max))
+  } else {
+    return(data.frame(Date = date, Diffuse_Min = NA, Diffuse_Max = NA))
+  }
+}
+
+dcm_diffuseness(CTD_CR$date, CTD_CR$depth, CTD_CR$fluorescence, dcm_cr$depth, dcm_cr$fluorescence, cm_sd_cr$fluorescence_sd)
+```
+
+
