@@ -1300,131 +1300,13 @@ new_data<-data.frame("date" = date_target,
 
 
   mld_t_ow<-rbind(mld_t_ow, new_data)
-}
-
-```{r}
-##filter data to exclude shallowest 10m
-
-
-CTD_OW_10<-CTD_OW%>%
-  filter(depth >= 10)
-
-CTD_CR_10<-CTD_CR%>%
-  filter(depth >= 10)
-
-
-##calculate DCM 
-cm_cr <- CTD_CR_10%>%
-  group_by(date,stn)%>%
-  dplyr::summarise(fluorescence = max(fluorescence))
-
-dep_cr<-CTD_CR_10%>%
-  dplyr::select(1,3,4,11)
-
-dcm_cr<-left_join(cm_cr,dep_cr,by=c("date","stn","fluorescence"))
-
-
-cm_ow <- CTD_OW_10%>%
-  group_by(date,stn)%>%
-  dplyr::summarise(fluorescence = max(fluorescence))
-
-dep_ow<-CTD_OW_10%>%
-  dplyr::select(1,3,4,11)
-
-dcm_ow<-left_join(cm_ow,dep_ow,by=c("date","stn","fluorescence"))
-
-
-#calculate MLD from temp
-
-CTD_date_cr<-CTD_CR_10%>%
-  group_by(date,stn)%>%
-  summarise(temp_av = mean(temperature))
-
-
-
-
-#################################################################
-# Calculate MLD from temperature based on the 0.2°C threshold method
-
-# if threshold is never met, water column is assumed to be homogenous and the deepest depth is selected
-
-CTD_date_cr <- CTD_CR_10 %>%
-  group_by(date, stn) %>%
-  summarise(temp_av = mean(temperature), .groups = "drop")
-
-# Initialize an empty dataframe to store MLD values
-mld_t_cr <- data.frame(date = as.POSIXct(character(0)), stn = character(0), depth = numeric(0))
-
-for(i in 1:nrow(CTD_date_cr)){
-  date_target <- CTD_date_cr$date[i]
   
-  temp_cr <- CTD_CR_10 %>%
-    filter(date == date_target & stn == "CR") %>%
-    arrange(depth)  # Ensure depth is sorted
-
-  if (nrow(temp_cr) > 0) {
-    # Get surface temperature (assuming the shallowest depth is at the top)
-    surface_temp <- temp_cr$temperature[1]
-    threshold_temp <- surface_temp - 0.2
-    
-    # Find the first depth where temperature drops below the threshold
-    mld_index <- which(temp_cr$temperature <= threshold_temp)[1]
-    
-    if (!is.na(mld_index)) {
-      mld_depth <- temp_cr$depth[mld_index]
-    } else {
-      # If no depth meets the threshold, assign the deepest depth available
-      mld_depth <- max(temp_cr$depth, na.rm = TRUE)
-    }
-    
-    # Store the result
-    new_data <- data.frame("date" = date_target, "stn" = "CR", "depth" = mld_depth)
-    mld_t_cr <- rbind(mld_t_cr, new_data)
-  }
-}
-###############################################################
-
-# Calculate MLD from temperature based on the 0.2°C threshold method
-
-CTD_date_ow <- CTD_OW_10 %>%
-  group_by(date, stn) %>%
-  summarise(temp_av = mean(temperature), .groups = "drop")
-
-# Initialize an empty dataframe to store MLD values
-mld_t_ow <- data.frame(date = as.POSIXct(character(0)), stn = character(0), depth = numeric(0))
-
-for(i in 1:nrow(CTD_date_ow)){
-  date_target <- CTD_date_ow$date[i]
-  
-  temp_ow <- CTD_OW_10 %>%
-    filter(date == date_target & stn == "OW") %>%
-    arrange(depth)  # Ensure depth is sorted
-
-  if (nrow(temp_ow) > 0) {
-    # Get surface temperature (assuming the shallowest depth is at the top)
-    surface_temp <- temp_ow$temperature[1]
-    threshold_temp <- surface_temp - 0.2
-    
-    # Find the first depth where temperature drops below the threshold
-    mld_index <- which(temp_ow$temperature <= threshold_temp)[1]
-    
-    if (!is.na(mld_index)) {
-      mld_depth <- temp_ow$depth[mld_index]
-    } else {
-      mld_depth <- NA
-    }
-    
-    # Store the result
-    new_data <- data.frame("date" = date_target, "stn" = "OW", "depth" = mld_depth)
-    mld_t_ow <- rbind(mld_t_ow, new_data)
-  }
 }
 
-#####################################################
 
+###############################
+###############################
 
-
-#calculate MLD from density
 
 mld_d_cr <- data.frame(date= as.POSIXct(character(0)), stn = character(0), depth = numeric(0))
 
@@ -1483,6 +1365,210 @@ new_data<-data.frame("date" = date_target,
 }
 
 ############################################
+
+```{r}
+##filter data to exclude shallowest 10m
+
+
+CTD_OW_10<-CTD_OW%>%
+  filter(depth >= 5)
+
+CTD_CR_10<-CTD_CR%>%
+  filter(depth >= 5)
+
+
+##calculate DCM 
+cm_cr <- CTD_CR_10%>%
+  group_by(date,stn)%>%
+  dplyr::summarise(fluorescence = max(fluorescence))
+
+dep_cr<-CTD_CR_10%>%
+  dplyr::select(1,3,4,11)
+
+dcm_cr<-left_join(cm_cr,dep_cr,by=c("date","stn","fluorescence"))
+
+
+cm_ow <- CTD_OW_10%>%
+  group_by(date,stn)%>%
+  dplyr::summarise(fluorescence = max(fluorescence))
+
+dep_ow<-CTD_OW_10%>%
+  dplyr::select(1,3,4,11)
+
+dcm_ow<-left_join(cm_ow,dep_ow,by=c("date","stn","fluorescence"))
+
+
+#calculate MLD from temp
+
+CTD_date_cr<-CTD_CR_10%>%
+  group_by(date,stn)%>%
+  summarise(temp_av = mean(temperature))
+
+
+
+
+#################################################################
+# Calculate MLD from temperature based on the 0.2°C threshold method 
+#will possibly change to 0.8C threshold depending on literature
+
+# if threshold is never met, water column is assumed to be homogenous and the deepest depth is selected
+
+CTD_date_cr <- CTD_CR_10 %>%
+  group_by(date, stn) %>%
+  summarise(temp_av = mean(temperature), .groups = "drop")
+
+# Initialize an empty dataframe to store MLD values
+mld_t_cr <- data.frame(date = as.POSIXct(character(0)), stn = character(0), depth = numeric(0))
+
+for(i in 1:nrow(CTD_date_cr)){
+  date_target <- CTD_date_cr$date[i]
+  
+  temp_cr <- CTD_CR_10 %>%
+    filter(date == date_target & stn == "CR") %>%
+    arrange(depth)  # Ensure depth is sorted
+
+  if (nrow(temp_cr) > 0) {
+    # Get surface temperature (assuming the shallowest depth is at the top)
+    surface_temp <- temp_cr$temperature[1]
+    threshold_temp <- surface_temp - 0.8
+    
+    # Find the first depth where temperature drops below the threshold
+    mld_index <- which(temp_cr$temperature <= threshold_temp)[1]
+    
+    if (!is.na(mld_index)) {
+      mld_depth <- temp_cr$depth[mld_index]
+    } else {
+      # If no depth meets the threshold, assign the deepest depth available
+      mld_depth <- max(temp_cr$depth, na.rm = TRUE)
+    }
+    
+    # Store the result
+    new_data <- data.frame("date" = date_target, "stn" = "CR", "depth" = mld_depth)
+    mld_t_cr <- rbind(mld_t_cr, new_data)
+  }
+}
+###############################################################
+
+# Calculate MLD from temperature based on the 0.2°C threshold method
+
+CTD_date_ow <- CTD_OW_10 %>%
+  group_by(date, stn) %>%
+  summarise(temp_av = mean(temperature), .groups = "drop")
+
+# Initialize an empty dataframe to store MLD values
+mld_t_ow <- data.frame(date = as.POSIXct(character(0)), stn = character(0), depth = numeric(0))
+
+for(i in 1:nrow(CTD_date_ow)){
+  date_target <- CTD_date_ow$date[i]
+  
+  temp_ow <- CTD_OW_10 %>%
+    filter(date == date_target & stn == "OW") %>%
+    arrange(depth)  # Ensure depth is sorted
+
+  if (nrow(temp_ow) > 0) {
+    # Get surface temperature (assuming the shallowest depth is at the top)
+    surface_temp <- temp_ow$temperature[1]
+    threshold_temp <- surface_temp - 0.8
+    
+    # Find the first depth where temperature drops below the threshold
+    mld_index <- which(temp_ow$temperature <= threshold_temp)[1]
+    
+     if (!is.na(mld_index)) {
+      mld_depth <- temp_ow$depth[mld_index]
+    } else {
+      # If no depth meets the threshold, assign the deepest depth available
+      mld_depth <- max(temp_ow$depth, na.rm = TRUE)
+    }
+    
+    # Store the result
+    new_data <- data.frame("date" = date_target, "stn" = "OW", "depth" = mld_depth)
+    mld_t_ow <- rbind(mld_t_ow, new_data)
+  }
+}
+
+#####################################################
+
+
+
+#calculate MLD from density
+#increase in 3 criteria with calculated density
+
+
+CTD_date_cr <- CTD_CR_10 %>%
+  group_by(date, stn) %>%
+  summarise(den_av = mean(density), .groups = "drop")
+
+# Initialize an empty dataframe to store MLD values
+mld_d_cr <- data.frame(date = as.POSIXct(character(0)), stn = character(0), depth = numeric(0))
+
+for(i in 1:nrow(CTD_date_cr)){
+  date_target <- CTD_date_cr$date[i]
+  
+  den_cr <- CTD_CR_10 %>%
+    filter(date == date_target & stn == "CR") %>%
+    arrange(depth)  # Ensure depth is sorted
+
+  if (nrow(den_cr) > 0) {
+    # Get surface density (assuming the shallowest depth is at the top)
+    surface_den <- den_cr$density[1]
+    threshold_den <- surface_den + 3
+    
+    # Find the first depth where temperature drops below the threshold
+    mld_index <- which(den_cr$density >= threshold_den)[1]
+    
+    if (!is.na(mld_index)) {
+      mld_depth <- den_cr$depth[mld_index]
+    } else {
+      # If no depth meets the threshold, assign the deepest depth available
+      mld_depth <- max(den_cr$depth, na.rm = TRUE)
+    }
+    
+    # Store the result
+    new_data <- data.frame("date" = date_target, "stn" = "CR", "depth" = mld_depth)
+    mld_d_cr <- rbind(mld_d_cr, new_data)
+  }
+}
+###############################################################
+
+# Calculate MLD from temperature based on the 0.2°C threshold method
+
+CTD_date_ow <- CTD_OW_10 %>%
+  group_by(date, stn) %>%
+  summarise(den_av = mean(density), .groups = "drop")
+
+# Initialize an empty dataframe to store MLD values
+mld_d_ow <- data.frame(date = as.POSIXct(character(0)), stn = character(0), depth = numeric(0))
+
+for(i in 1:nrow(CTD_date_ow)){
+  date_target <- CTD_date_ow$date[i]
+  
+  den_ow <- CTD_OW_10 %>%
+    filter(date == date_target & stn == "OW") %>%
+    arrange(depth)  # Ensure depth is sorted
+
+  if (nrow(den_ow) > 0) {
+    # Get surface temperature (assuming the shallowest depth is at the top)
+    surface_den <- den_ow$density[1]
+    threshold_den <- surface_den + 3
+    
+    # Find the first depth where temperature drops below the threshold
+    mld_index <- which(den_ow$density >= threshold_den)[1]
+    
+    if (!is.na(mld_index)) {
+      mld_depth <- den_ow$depth[mld_index]
+    } else {
+      # If no depth meets the threshold, assign the deepest depth available
+      mld_depth <- max(den_ow$depth, na.rm = TRUE)
+    }
+    
+    # Store the result
+    new_data <- data.frame("date" = date_target, "stn" = "OW", "depth" = mld_depth)
+    mld_d_ow <- rbind(mld_d_ow, new_data)
+  }
+}
+#####################################################
+
+
 ##############################################
 
 ###############################################
@@ -1639,7 +1725,6 @@ CR_temp<-ggplot()+
   scale_y_reverse()+
   scale_color_continuous(type = "viridis")+
   scale_fill_continuous(type = "viridis")+
-  ggtitle("temperature CR & MLD from temp")+
 scale_x_continuous(breaks = pretty(CTD_CR$date, n = 10))+
   theme_cowplot()
 
